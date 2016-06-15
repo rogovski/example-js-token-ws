@@ -4,17 +4,31 @@ import path from 'path';
 import iocons from 'socket.io';
 import morgan from 'morgan';
 import bodyparser from 'body-parser';
-import jwt from 'jsonwebtoken';
+import cookieparser from 'cookie-parser';
+import jwtcons from 'jsonwebtoken';
+import promise from 'bluebird';
 import config from './config';
+
+import {
+  buildApiTokenDecoder,
+  buildWebTokenDecoder
+} from './src/server/middleware/token';
 
 const app = express();
 const server = http.Server(app);
 const io = iocons(server);
+const jwt = promise.promisifyAll(jwtcons);
 
 /**
  * set global jwt token secret
  */
 app.set('tokensecret', config.tokensecret);
+
+
+/**
+ * configure cookie parser
+ */
+app.use(cookieparser());
 
 
 /**
@@ -43,11 +57,52 @@ app.set('views', path.join(__dirname, 'src/server/views'));
 app.use(express.static('public'));
 
 
+const checkTokenForApi = buildApiTokenDecoder(app.get('tokensecret'));
+const checkTokenForWeb = buildWebTokenDecoder(app.get('tokensecret'));
+
+
 /**
  * serve index page
  */
-app.get('/', (req, res) => {
+app.get('/', checkTokenForWeb, (req, res) => {
+  console.log(req.cookies.webToken);
   res.render('index');
+});
+
+
+/**
+ * serve login page
+ */
+app.get('/login', (req, res) => {
+  res.render('login');
+});
+
+/**
+ * authenticate via web browser
+ * TODO: refactor to routes module
+ */
+app.post('/authenticate', (req, res) => {
+  console.log(req.body.inputName);
+  console.log(req.body.inputPassword);
+
+  if(req.body.inputName == 'admin' && req.body.inputPassword == 'pass') {
+    jwt.signAsync(
+      { name: 'admin' },
+      app.get('tokensecret'),
+      { expiresIn: 86400 }
+    ).then(token => {
+      return res.cookie('webToken', token, {
+        maxAge: 86400,
+        httpOnly: true
+      }).redirect('/');
+    })
+    .catch(err => {
+      return res.redirect('/login');
+    });
+  }
+  else {
+    res.redirect('/login');
+  }
 });
 
 
@@ -57,39 +112,6 @@ app.get('/', (req, res) => {
 io.on('connection', (socket) => {
   console.log('user connected');
 });
-
-
-/**
- * token decoding middleware for api
- * TODO: promisify and refactor to src/server/middleware
- */
-const decodeTokenForApi = (req, res, next) => {
-  // valid locations of token in api request
-  var token = req.body.token ||
-              req.query['token'] ||
-              req.headers['x-access-token'];
-
-  if (token) {
-    jwt.verify(token, app.get('tokensecret'), (err, decoded) => {
-      if (err) {
-        res.json({
-          success: false,
-          message: 'failed to authenticate'
-        });
-      }
-      else {
-        req.decoded = decoded;
-        next();
-      }
-    });
-  }
-  else {
-    return res.status(403).send({
-      success: false,
-      message: 'no token provided'
-    });
-  }
-};
 
 
 /**
@@ -117,7 +139,7 @@ apiRoutes.get('/auth', (req, res) => {
 });
 
 
-apiRoutes.get('/', decodeTokenForApi, (req, res) => {
+apiRoutes.get('/', checkTokenForApi, (req, res) => {
   res.json(req.decoded);
 });
 
