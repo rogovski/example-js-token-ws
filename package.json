@@ -8,11 +8,13 @@
     "webpackServer": "webpack-dev-server --hot --inline --port 8686",
     "watchServer": "nodemon.cmd -e js,jsx,json -w server.js -w src/server -i src/client -x babel-node.cmd server",
     "devServers": "parallelshell.cmd \"npm run webpackServer\" \"npm run watchServer\" ",
+    "bootstrap": "babel-node.cmd bootstrap.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "bcrypt-nodejs": "0.0.3",
     "bluebird": "^3.4.0",
     "body-parser": "^1.13.3",
     "cookie-parser": "^1.4.3",

@@ -7,22 +7,15 @@ import bodyparser from 'body-parser';
 import cookieparser from 'cookie-parser';
 import jwtcons from 'jsonwebtoken';
 import promise from 'bluebird';
-import config from './config';
-
-import {
-  buildApiTokenDecoder,
-  buildWebTokenDecoder
-} from './src/server/middleware/token';
+import mongoose from 'mongoose';
+import * as container from './container';
+import rootroutector from './src/server/routes/root';
+import authroutector from './src/server/routes/authenticate';
 
 const app = express();
 const server = http.Server(app);
 const io = iocons(server);
 const jwt = promise.promisifyAll(jwtcons);
-
-/**
- * set global jwt token secret
- */
-app.set('tokensecret', config.tokensecret);
 
 
 /**
@@ -57,55 +50,6 @@ app.set('views', path.join(__dirname, 'src/server/views'));
 app.use(express.static('public'));
 
 
-const checkTokenForApi = buildApiTokenDecoder(app.get('tokensecret'));
-const checkTokenForWeb = buildWebTokenDecoder(app.get('tokensecret'));
-
-
-/**
- * serve index page
- */
-app.get('/', checkTokenForWeb, (req, res) => {
-  console.log(req.cookies.webToken);
-  res.render('index');
-});
-
-
-/**
- * serve login page
- */
-app.get('/login', (req, res) => {
-  res.render('login');
-});
-
-/**
- * authenticate via web browser
- * TODO: refactor to routes module
- */
-app.post('/authenticate', (req, res) => {
-  console.log(req.body.inputName);
-  console.log(req.body.inputPassword);
-
-  if(req.body.inputName == 'admin' && req.body.inputPassword == 'pass') {
-    jwt.signAsync(
-      { name: 'admin' },
-      app.get('tokensecret'),
-      { expiresIn: 86400 }
-    ).then(token => {
-      return res.cookie('webToken', token, {
-        maxAge: 86400,
-        httpOnly: true
-      }).redirect('/');
-    })
-    .catch(err => {
-      return res.redirect('/login');
-    });
-  }
-  else {
-    res.redirect('/login');
-  }
-});
-
-
 /**
  * handle socket connections
  */
@@ -118,6 +62,7 @@ io.on('connection', (socket) => {
  * Api Routes
  * TODO: refactor to separate module
  */
+/*
 const apiRoutes = express.Router();
 
 apiRoutes.get('/auth', (req, res) => {
@@ -126,7 +71,7 @@ apiRoutes.get('/auth', (req, res) => {
     name: 'some name',
     claims: ['reader', 'cool']
   },
-  app.get('tokensecret'),
+  container.token.secret,
   {
     expiresIn: 86400
   });
@@ -139,16 +84,34 @@ apiRoutes.get('/auth', (req, res) => {
 });
 
 
-apiRoutes.get('/', checkTokenForApi, (req, res) => {
+apiRoutes.get('/', container.middleware.token.checkTokenForApi, (req, res) => {
   res.json(req.decoded);
 });
 
 
 app.use('/api', apiRoutes);
+*/
 
+const rootroute = rootroutector(container);
+app.use('/', rootroute.web);
 
+const authroute = authroutector(container);
+app.use('/authenticate', authroute.web);
 
 /**
  * start server
  */
-server.listen(config.port, () => { console.log('SERVER RUNNING'); });
+
+const mongodbconn = mongoose.connection;
+
+mongodbconn.on('error', () => {
+  console.log('MONGO CONNECTION ERROR');
+});
+
+mongodbconn.once('open', () => {
+  server.listen(container.port, () => {
+    console.log('SERVER RUNNING');
+  });
+});
+
+mongoose.connect(container.mongo.db);

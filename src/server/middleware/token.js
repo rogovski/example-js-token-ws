@@ -3,6 +3,11 @@ import promise from 'bluebird';
 
 const jwt = promise.promisifyAll(jwtcons);
 
+
+/**
+ * middleware to decode token passed via api based
+ * http request.
+ */
 export function buildApiTokenDecoder(signingkey) {
   return (req, res, next) => {
 
@@ -33,6 +38,11 @@ export function buildApiTokenDecoder(signingkey) {
   };
 }
 
+
+/**
+ * middleware to decode token passed via browser based
+ * http request.
+ */
 export function buildWebTokenDecoder(signingkey) {
   return (req, res, next) => {
     var token = req.cookies.webToken;

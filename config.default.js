@@ -6,6 +6,8 @@ module.exports = {
 
   port: 8082,
 
-  tokensecret: 'secret'
+  tokensecret: 'secret',
+
+  tokentimeout: 1800
 
 };
