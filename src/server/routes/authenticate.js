@@ -31,12 +31,11 @@ export default function (container) {
         return jwt.signAsync(
           { name: name },
           signingkey,
-          { expiresIn: container.token.timeout }
+          { expiresIn: timeout }
         );
       })
       .then(token => {
         return res.cookie('webToken', token, {
-          maxAge: container.token.timeout,
           httpOnly: true
         }).redirect('/');
       })
